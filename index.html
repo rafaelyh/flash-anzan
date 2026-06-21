@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Flash Anzan</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: #0d1b2e;
+    min-height: 100dvh;           /* dvh: respeita barra de endereço do celular */
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* painel principal ocupa toda a tela no celular */
+  #app {
+    background: #1a2a4a;
+    min-height: 100dvh;
+    width: 100%;
+    max-width: 480px;             /* limite para tablets */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom)); /* recuo para iPhone com notch */
+  }
+
+  .screen { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+  /* ── TECLADO NUMÉRICO ── */
+  /* ocupa largura proporcional à tela, máximo de 320px */
+  .numpad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(6px, 2vw, 10px);
+    width: 100%;
+    max-width: 320px;
+  }
+  .numpad button {
+    background: #d4b44a;
+    border: none; border-radius: 10px;
+    color: #2a1a00;
+    font-size: clamp(20px, 6vw, 26px);
+    font-weight: 600;
+    padding: clamp(14px, 4vw, 20px) 0;  /* padding vertical proporcional */
+    cursor: pointer;
+    transition: opacity 0.1s;
+    touch-action: manipulation;          /* evita delay de 300ms no toque */
+  }
+  .numpad button:active { opacity: 0.55; }
+
+  /* ── CAMPO DE TEMPO ── */
+  .display-input {
+    background: white; border-radius: 8px;
+    width: 100%; max-width: 320px;
+    text-align: center;
+    font-size: clamp(22px, 7vw, 30px);
+    padding: 10px 12px; color: #111;
+    min-height: 50px;
+  }
+
+  /* ── BOTÃO APAGAR ── */
+  .btn-del {
+    background: #3a7fd4; border: none; border-radius: 10px;
+    color: white; font-size: clamp(13px, 4vw, 16px);
+    padding: 14px 0; cursor: pointer;
+    width: 100%; max-width: 320px;
+    touch-action: manipulation;
+  }
+  .btn-del:active { opacity: 0.7; }
+
+  /* ── BOTÃO INICIAR ── */
+  .btn-start {
+    background: #c0392b; border: none; border-radius: 10px;
+    color: white; font-size: clamp(16px, 5vw, 20px); font-weight: 600;
+    padding: 16px 0; cursor: pointer;
+    width: 100%; max-width: 320px;
+    touch-action: manipulation;
+  }
+  .btn-start:active { opacity: 0.7; }
+
+  /* ── BOTÕES DE RESULTADO ── */
+  .action-row { display: flex; gap: 10px; width: 100%; max-width: 320px; }
+  .btn-action {
+    border: none; border-radius: 10px;
+    font-size: clamp(13px, 4vw, 16px); font-weight: 600;
+    padding: 14px 0; cursor: pointer;
+    flex: 1;                             /* divide igualmente o espaço */
+    touch-action: manipulation;
+  }
+  .btn-action:active { opacity: 0.7; }
+  .btn-action.repeat { background: #2ecc71; color: #0a2a10; }
+  .btn-action.menu   { background: #7f8c8d; color: white; }
+  .btn-action.next   { background: #3a7fd4; color: white; }
+
+  /* ── SELECTS E LABELS ── */
+  .meta  { color: #7899b8; font-size: clamp(12px, 3.5vw, 14px); text-align: center; }
+  label  { color: #a8c4e0; font-size: clamp(13px, 4vw, 15px); }
+  select {
+    background: #2a3f6a; color: white;
+    border: 1px solid #3a5a8a; border-radius: 8px;
+    padding: 8px 12px; font-size: clamp(14px, 4vw, 16px);
+    -webkit-appearance: none;            /* remove estilo padrão iOS */
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23a8c4e0' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
+  }
+
+  /* ── NÚMERO DO FLASH ── */
+  .flash-number {
+    font-size: clamp(80px, 22vw, 140px);
+    font-weight: 900; color: #7dff9a;
+    text-align: center; line-height: 1;
+    letter-spacing: -4px;
+  }
+
+  /* ── CONTAGEM REGRESSIVA ── */
+  .countdown-number {
+    font-size: clamp(80px, 22vw, 140px);
+    font-weight: 900; color: #d4b44a;
+    text-align: center; line-height: 1;
+  }
+
+  /* ── FUNDO ESCURO DO FLASH ── */
+  .flash-bg {
+    background: #0f1e38; border-radius: 16px;
+    width: 100%;
+    height: clamp(180px, 40vw, 260px);  /* altura proporcional */
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── RESULTADO ── */
+  .result-sum {
+    font-size: clamp(64px, 18vw, 110px);
+    font-weight: 900; color: #7dff9a;
+    line-height: 1; letter-spacing: -3px;
+  }
+  .result-label    { color: #5a8aaa; font-size: clamp(12px, 3.5vw, 14px); }
+  .result-feedback { font-size: clamp(22px, 6vw, 32px); font-weight: 700; margin-top: 4px; }
+
+  /* ── DISPLAY DA RESPOSTA ── */
+  .answer-label {
+    color: #a8c4e0; font-size: clamp(14px, 4vw, 16px);
+    align-self: flex-start; padding-left: 2px;
+  }
+  .answer-display {
+    background: #0f1e38; border: 2px solid #3a7fd4;
+    border-radius: 10px;
+    width: 100%; max-width: 320px;
+    text-align: center;
+    font-size: clamp(28px, 8vw, 40px); font-weight: 700;
+    padding: 12px; color: white;
+    min-height: 60px; letter-spacing: 2px;
+  }
+  .answer-numpad button { background: #2a4a7a; color: white; }
+
+  /* ── EXTRAS ── */
+  .hint         { color: #3a5a7a; font-size: clamp(10px, 3vw, 12px); text-align: center; margin-top: -4px; }
+  .diary-toggle { color: #4a6a8a; font-size: clamp(12px, 3.5vw, 14px); cursor: pointer; text-decoration: underline; }
+  #diary-panel  {
+    background: #0f1e38; border-radius: 10px;
+    padding: 12px; width: 100%;
+    max-height: 160px; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;   /* scroll suave no iOS */
+  }
+  .diary-entry  { color: #6a9aba; font-size: clamp(11px, 3.2vw, 13px); border-bottom: 0.5px solid #1e3060; padding: 5px 0; line-height: 1.6; }
+  .diary-entry span   { color: #a8c4e0; }
+  .diary-entry .wrong { color: #e74c3c; }
+  .diary-entry .date  { color: #4a6a7a; font-size: clamp(10px, 2.8vw, 12px); }
+
+  hr  { border: none; border-top: 0.5px solid #2a4060; width: 100%; max-width: 320px; }
+  .row { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 320px; justify-content: space-between; }
+  .row-inner { display: flex; align-items: center; gap: 8px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TELA 1: MENU DE CONFIGURAÇÃO -->
+  <div id="screen-menu" class="screen">
+
+    <!-- campo de tempo digitado -->
+    <div class="display-input" id="speed-display">5</div>
+
+    <!-- teclado numérico amarelo para digitar o tempo -->
+    <div class="numpad">
+      <button onclick="numPress('1')">1</button>
+      <button onclick="numPress('2')">2</button>
+      <button onclick="numPress('3')">3</button>
+      <button onclick="numPress('4')">4</button>
+      <button onclick="numPress('5')">5</button>
+      <button onclick="numPress('6')">6</button>
+      <button onclick="numPress('7')">7</button>
+      <button onclick="numPress('8')">8</button>
+      <button onclick="numPress('9')">9</button>
+      <button style="grid-column:1" onclick="numPress('0')">0</button>
+      <button style="grid-column:3" onclick="numPress('.')">.</button>
+    </div>
+
+    <button class="btn-del" onclick="numDel()">⌫ Apagar</button>
+    <hr>
+
+    <!-- seletor de algarismos e parcelas lado a lado -->
+    <div class="row">
+      <div class="row-inner">
+        <label for="algarismos">Algarismos:</label>
+        <select id="algarismos" onchange="updateMeta()">
+          <option>1</option><option>2</option>
+          <option value="3" selected>3</option>
+          <option>4</option><option>5</option><option>6</option>
+        </select>
+      </div>
+      <div class="row-inner">
+        <label for="parcelas">Parcelas:</label>
+        <select id="parcelas" onchange="updateMeta()">
+          <option>2</option><option>3</option><option>4</option><option>5</option>
+          <option>6</option><option>7</option><option>8</option><option>9</option>
+          <option>10</option><option>11</option><option>12</option><option>13</option>
+          <option>14</option><option value="15" selected>15</option><option>16</option>
+          <option>17</option><option>18</option><option>19</option><option>20</option>
+          <option>21</option><option>22</option><option>23</option><option>24</option>
+          <option>25</option><option>26</option><option>27</option><option>28</option>
+          <option>29</option><option>30</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="meta" id="meta-info">3 alg. · 15 parcelas · total: 5s · intervalo: 0.33s</div>
+    <button class="btn-start" onclick="startCountdown()">▶ Iniciar</button>
+
+    <div class="diary-toggle" onclick="toggleDiary()">▼ Diário de treinos</div>
+    <div id="diary-panel" style="display:none">
+      <div id="diary-list"><div class="diary-entry" style="color:#3a5a7a">Nenhum registro ainda.</div></div>
+    </div>
+  </div>
+
+  <!-- TELA 2: CONTAGEM REGRESSIVA -->
+  <div id="screen-countdown" class="screen" style="display:none">
+    <div class="flash-bg">
+      <div class="countdown-number" id="countdown-num">2</div>
+    </div>
+    <!-- botão de cancelar visível no celular (sem teclado físico) -->
+    <button class="btn-del" style="max-width:320px;margin-top:8px" onclick="abortGame()">✕ Cancelar</button>
+  </div>
+
+  <!-- TELA 3: FLASH DOS NÚMEROS -->
+  <div id="screen-flash" class="screen" style="display:none">
+    <div class="flash-bg">
+      <div class="flash-number" id="flash-num"></div>
+    </div>
+    <button class="btn-del" style="max-width:320px;margin-top:8px" onclick="abortGame()">✕ Cancelar</button>
+  </div>
+
+  <!-- TELA 4: DIGITAÇÃO DA RESPOSTA -->
+  <div id="screen-answer" class="screen" style="display:none">
+    <div class="answer-label">Qual é o resultado?</div>
+    <div class="answer-display" id="answer-display">_</div>
+    <!-- teclado azul para digitar a resposta -->
+    <div class="numpad answer-numpad">
+      <button onclick="ansPress('1')">1</button>
+      <button onclick="ansPress('2')">2</button>
+      <button onclick="ansPress('3')">3</button>
+      <button onclick="ansPress('4')">4</button>
+      <button onclick="ansPress('5')">5</button>
+      <button onclick="ansPress('6')">6</button>
+      <button onclick="ansPress('7')">7</button>
+      <button onclick="ansPress('8')">8</button>
+      <button onclick="ansPress('9')">9</button>
+      <button style="grid-column:1" onclick="ansPress('0')">0</button>
+    </div>
+    <button class="btn-del" onclick="ansDel()">⌫ Apagar</button>
+    <button class="btn-start" onclick="confirmAnswer()">✓ Confirmar</button>
+    <button class="btn-action menu" style="width:100%;max-width:320px;padding:12px 0" onclick="abortGame()">☰ Voltar ao menu</button>
+  </div>
+
+  <!-- TELA 5: RESULTADO -->
+  <div id="screen-result" class="screen" style="display:none">
+    <div class="result-label">Resultado correto</div>
+    <div class="result-sum" id="result-num">0</div>
+    <div class="result-feedback" id="result-feedback"></div>
+    <div style="color:#5a8a6a;font-size:13px;text-align:center" id="result-info"></div>
+    <div class="action-row">
+      <button class="btn-action repeat" onclick="repeatGame()">↺ Repetir</button>
+      <button class="btn-action menu"   onclick="goMenu()">☰ Menu</button>
+      <button class="btn-action next"   onclick="nextGame()">▶ Próximo</button>
+    </div>
+  </div>
+
+</div>
+<script>
+/* ============================================================
+   ÁUDIO — Web Audio API
+   Cada função cria um oscilador curto para gerar um bipe.
+   - freq: frequência em Hz | type: forma da onda | dur: duração | vol: volume
+   ============================================================ */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function beep(freq, type, dur, vol) {
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.start();
+  osc.stop(audioCtx.currentTime + dur);
+}
+
+function soundFlash()     { beep(880, 'sine', 0.07, 0.3); }
+function soundCorrect()   { beep(523,'sine',0.15,0.4); setTimeout(()=>beep(659,'sine',0.15,0.4),120); setTimeout(()=>beep(784,'sine',0.25,0.4),240); }
+function soundWrong()     { beep(220,'sawtooth',0.18,0.4); setTimeout(()=>beep(180,'sawtooth',0.28,0.35),150); }
+function soundCountdown() { beep(440,'sine',0.12,0.25); }
+function soundGo()        { beep(660,'sine',0.18,0.4); }
+
+/* ============================================================
+   ESTADO DO JOGO
+   ============================================================ */
+let speedVal          = '5';           /* texto atual no campo de tempo */
+let gameNums          = [];            /* números da rodada ativa */
+let gameSum           = 0;            /* soma correta da rodada ativa */
+let flashIdx          = 0;            /* índice do próximo número a exibir */
+let flashTimer        = null;         /* setTimeout do flash (para cancelar) */
+let lastParcelas      = 15;           /* parcelas da última rodada */
+let lastAlgarismos    = 3;            /* algarismos da última rodada */
+let lastSpeed         = 5;            /* tempo total da última rodada */
+let lastNums          = [];           /* números da última rodada (para Repetir) */
+let lastSum           = 0;            /* soma da última rodada (para Repetir) */
+let answerVal         = '';           /* dígitos digitados na tela de resposta */
+let diary             = [];           /* histórico (máx. 30 entradas) */
+let activeScreen      = 'screen-menu';
+let aborted           = false;        /* flag para cancelar via botão ou Esc */
+let countdownInterval = null;
+
+/* ============================================================
+   NAVEGAÇÃO ENTRE TELAS
+   ============================================================ */
+function show(id) {
+  ['screen-menu','screen-countdown','screen-flash','screen-answer','screen-result'].forEach(s => {
+    const el = document.getElementById(s);
+    el.style.display = (s === id) ? 'flex' : 'none';
+    if (s === id) el.style.flexDirection = 'column';
+  });
+  activeScreen = id;
+  /* scroll para o topo ao trocar de tela (útil em celulares pequenos) */
+  window.scrollTo(0, 0);
+}
+
+/* ============================================================
+   TECLADO DO MENU — digitar o tempo total
+   ============================================================ */
+function numPress(c) {
+  if (c === '.' && speedVal.includes('.')) return; /* impede dois pontos */
+  if (speedVal === '0' && c !== '.') speedVal = c;
+  else speedVal += c;
+  if (speedVal.length > 7) return;
+  document.getElementById('speed-display').textContent = speedVal;
+  updateMeta();
+}
+function numDel() {
+  speedVal = speedVal.slice(0, -1) || '0';
+  document.getElementById('speed-display').textContent = speedVal;
+  updateMeta();
+}
+function updateMeta() {
+  const p        = parseInt(document.getElementById('parcelas').value) || 15;
+  const a        = parseInt(document.getElementById('algarismos').value) || 3;
+  const s        = parseFloat(speedVal) || 0;
+  const interval = (s > 0 && p > 0) ? (s / p).toFixed(2) : '0';
+  document.getElementById('meta-info').textContent =
+    `${a} alg. · ${p} parcelas · total: ${s}s · intervalo: ${interval}s`;
+}
+updateMeta();
+
+/* ============================================================
+   TECLADO DA RESPOSTA
+   ============================================================ */
+function ansPress(c) {
+  if (answerVal.length >= 8) return;
+  answerVal += c;
+  document.getElementById('answer-display').textContent = answerVal;
+}
+function ansDel() {
+  answerVal = answerVal.slice(0, -1);
+  document.getElementById('answer-display').textContent = answerVal || '_';
+}
+
+/* ============================================================
+   CONFIRMAR RESPOSTA
+   Vazio = 0. Compara com gameSum, registra no diário, exibe feedback.
+   ============================================================ */
+function confirmAnswer() {
+  const userAns = (answerVal === '') ? 0 : parseInt(answerVal);
+  const correct = (userAns === gameSum);
+  const now  = new Date();
+  const date = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit' });
+  const hm   = now.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  diary.unshift({ date, hm, parcelas: lastParcelas, algarismos: lastAlgarismos, speed: lastSpeed, sum: gameSum, userAns, correct });
+  if (diary.length > 30) diary.pop();
+  renderDiary();
+  show('screen-result');
+  document.getElementById('result-num').textContent  = gameSum;
+  document.getElementById('result-info').textContent =
+    `${lastAlgarismos} alg. · ${lastParcelas} parcelas · ${lastSpeed}s · sua resposta: ${userAns}`;
+  if (correct) {
+    document.getElementById('result-feedback').textContent = '✓ Correto!';
+    document.getElementById('result-feedback').style.color = '#2ecc71';
+    soundCorrect();
+  } else {
+    document.getElementById('result-feedback').textContent = '✗ Errado';
+    document.getElementById('result-feedback').style.color = '#e74c3c';
+    soundWrong();
+  }
+}
+
+/* ============================================================
+   ATALHOS DE TECLADO FÍSICO (para quando usado com teclado)
+   ============================================================ */
+document.addEventListener('keydown', e => {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    if (['screen-countdown','screen-flash','screen-answer','screen-result'].includes(activeScreen)) abortGame();
+    return;
+  }
+  if (activeScreen === 'screen-menu') {
+    if (e.key >= '0' && e.key <= '9')       numPress(e.key);
+    else if (e.key === '.' || e.key === ',') numPress('.');
+    else if (e.key === 'Backspace') { e.preventDefault(); numDel(); }
+    else if (e.key === 'Enter')     startCountdown();
+  } else if (activeScreen === 'screen-answer') {
+    if (e.key >= '0' && e.key <= '9')       ansPress(e.key);
+    else if (e.key === 'Backspace') { e.preventDefault(); ansDel(); }
+    else if (e.key === 'Enter')     confirmAnswer();
+  } else if (activeScreen === 'screen-result') {
+    if (e.key === 'Enter') nextGame();
+  }
+});
+
+/* ============================================================
+   GERAÇÃO DE NÚMEROS
+   `digits` algarismos: min = 10^(d-1), max = 10^d - 1
+   ============================================================ */
+function genNumbers(count, digits) {
+  const min = Math.pow(10, digits - 1);
+  const max = Math.pow(10, digits) - 1;
+  return Array.from({ length: count }, () => Math.floor(Math.random() * (max - min + 1)) + min);
+}
+
+/* ============================================================
+   CONTAGEM REGRESSIVA (2 → 1 → flash)
+   ============================================================ */
+function runCountdown(cb) {
+  show('screen-countdown');
+  aborted = false;
+  let count = 2;
+  document.getElementById('countdown-num').textContent = count;
+  soundCountdown();
+  countdownInterval = setInterval(() => {
+    if (aborted) { clearInterval(countdownInterval); return; }
+    count--;
+    if (count <= 0) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+      if (aborted) return;
+      soundGo();
+      show('screen-flash');
+      document.getElementById('flash-num').textContent = '';
+      setTimeout(cb, 200);
+    } else {
+      document.getElementById('countdown-num').textContent = count;
+      soundCountdown();
+    }
+  }, 1000);
+}
+
+/* ============================================================
+   INICIAR NOVA CONTA
+   Lê configurações, gera números, salva em lastNums/lastSum.
+   ============================================================ */
+function startCountdown() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  lastParcelas   = parseInt(document.getElementById('parcelas').value) || 15;
+  lastSpeed      = parseFloat(speedVal) || 1;
+  lastAlgarismos = parseInt(document.getElementById('algarismos').value) || 3;
+  lastNums       = genNumbers(lastParcelas, lastAlgarismos);
+  lastSum        = lastNums.reduce((a, b) => a + b, 0);
+  gameNums       = lastNums;
+  gameSum        = lastSum;
+  flashIdx       = 0;
+  runCountdown(runFlash);
+}
+
+/* ============================================================
+   LOOP DO FLASH
+   Intervalo entre números = tempoTotal / quantidadeParcelas
+   ============================================================ */
+function runFlash() {
+  if (aborted) return;
+  if (flashIdx >= gameNums.length) {
+    clearTimeout(flashTimer);
+    document.getElementById('flash-num').textContent = '';
+    setTimeout(() => {
+      if (aborted) return;
+      answerVal = '';
+      document.getElementById('answer-display').textContent = '_';
+      show('screen-answer');
+    }, 300);
+    return;
+  }
+  const intervalMs = (lastSpeed / lastParcelas) * 1000;
+  document.getElementById('flash-num').textContent = gameNums[flashIdx];
+  soundFlash();
+  flashIdx++;
+  flashTimer = setTimeout(runFlash, intervalMs);
+}
+
+/* ============================================================
+   ABORTAR — cancela tudo e volta ao menu
+   ============================================================ */
+function abortGame() {
+  aborted = true;
+  clearTimeout(flashTimer);
+  clearInterval(countdownInterval);
+  countdownInterval = null;
+  flashTimer = null;
+  goMenu();
+}
+
+/* ============================================================
+   REPETIR — mesmos números da última conta
+   ============================================================ */
+function repeatGame() {
+  gameNums = lastNums.slice(); /* .slice() para não mutar o array original */
+  gameSum  = lastSum;
+  flashIdx = 0;
+  runCountdown(runFlash);
+}
+
+/* ============================================================
+   PRÓXIMO — nova sequência, mesmas configurações
+   ============================================================ */
+function nextGame() {
+  lastNums = genNumbers(lastParcelas, lastAlgarismos);
+  lastSum  = lastNums.reduce((a, b) => a + b, 0);
+  gameNums = lastNums.slice();
+  gameSum  = lastSum;
+  flashIdx = 0;
+  runCountdown(runFlash);
+}
+
+/* ============================================================
+   MENU E DIÁRIO
+   ============================================================ */
+function goMenu() { show('screen-menu'); }
+
+function toggleDiary() {
+  const painel = document.getElementById('diary-panel');
+  painel.style.display = (painel.style.display === 'none') ? 'block' : 'none';
+}
+
+function renderDiary() {
+  const el = document.getElementById('diary-list');
+  if (!diary.length) {
+    el.innerHTML = '<div class="diary-entry" style="color:#3a5a7a">Nenhum registro ainda.</div>';
+    return;
+  }
+  el.innerHTML = diary.map(d =>
+    `<div class="diary-entry">
+      <span class="date">${d.date} ${d.hm}</span>
+      · ${d.algarismos} alg. · ${d.parcelas}x · ${d.speed}s
+      → gabarito: <span>${d.sum}</span>
+      · resposta: <span class="${d.correct ? '' : 'wrong'}">${d.userAns}</span>
+      ${d.correct ? '✓' : '✗'}
+    </div>`
+  ).join('');
+}
+</script>
+</body>
+</html>
